@@ -70,6 +70,7 @@ const LoginPage = ({ onBack, onLoginSuccess }: LoginPageProps) => {
   const [resolvedSchool, setResolvedSchool] = useState<any>(null);
   const [selectedSchoolId, setSelectedSchoolId] = useState("");
   const [selectedClassId, setSelectedClassId] = useState("");
+  const [resolvingSchool, setResolvingSchool] = useState(false);
 
   useEffect(() => {
     if (selectedSchoolId) loadClasses(selectedSchoolId);
@@ -94,36 +95,52 @@ const LoginPage = ({ onBack, onLoginSuccess }: LoginPageProps) => {
     const id = schoolInputId.trim();
     if (!id) return;
 
-    const { data, error } = await supabase
-      .from("schools")
-      .select("id, name, city")
-      .eq("id", id)
-      .maybeSingle();
+    setResolvingSchool(true);
+    const toastId = toast.loading("Ищем школу...");
+    try {
+      const { data, error } = await supabase
+        .from("schools")
+        .select("id, name, city")
+        .eq("id", id)
+        .maybeSingle();
 
-    if (error || !data) {
-      setResolvedSchool(null);
-      setSelectedSchoolId("");
-      setClasses([]);
-      setSelectedClassId("");
-      toast.error(error?.message || "Школа с таким ID не найдена");
-      return;
-    }
+      if (error || !data) {
+        setResolvedSchool(null);
+        setSelectedSchoolId("");
+        setClasses([]);
+        setSelectedClassId("");
+        toast.dismiss(toastId);
+        toast.error(
+          error?.message ||
+            "Школа с таким ID не найдена. Введите полный UUID (36 символов).",
+        );
+        return;
+      }
 
-    setResolvedSchool(data);
-    setSelectedSchoolId(data.id);
-    const { data: classRows, error: classErr } = await supabase.rpc("get_classes_for_school", {
-      p_school_id: data.id,
-    });
+      setResolvedSchool(data);
+      setSelectedSchoolId(data.id);
+      const { data: classRows, error: classErr } = await supabase.rpc("get_classes_for_school", {
+        p_school_id: data.id,
+      });
 
-    if (classErr) {
-      toast.error(`Школа найдена, но классы не читаются: ${classErr.message}`);
-      return;
-    }
+      if (classErr) {
+        toast.dismiss(toastId);
+        toast.error(`Школа найдена, но классы не читаются: ${classErr.message}`);
+        return;
+      }
 
-    if (!classRows || classRows.length === 0) {
-      toast.error("Школа найдена, но в БД для нее нет классов");
-    } else {
-      toast.success(`${data.name} (${data.city}) — классов: ${classRows.length}`);
+      toast.dismiss(toastId);
+      if (!classRows || classRows.length === 0) {
+        toast.error("Школа найдена, но в БД для нее нет классов");
+      } else {
+        toast.success(`${data.name} (${data.city}) — классов: ${classRows.length}`);
+      }
+    } catch (e) {
+      console.error("resolveSchoolById error:", e);
+      toast.dismiss(toastId);
+      toast.error("Не удалось загрузить школу. Проверьте интернет и повторите.");
+    } finally {
+      setResolvingSchool(false);
     }
   };
 
@@ -264,9 +281,10 @@ const LoginPage = ({ onBack, onLoginSuccess }: LoginPageProps) => {
                 whileTap={{ scale: 0.95 }}
                 type="button"
                 onClick={resolveSchoolById}
+                disabled={resolvingSchool}
                 className="px-4 rounded-xl bg-card border-2 border-border font-bold text-foreground"
               >
-                OK
+                {resolvingSchool ? <Loader2 className="w-4 h-4 animate-spin" /> : "OK"}
               </motion.button>
             </div>
             {resolvedSchool && (
