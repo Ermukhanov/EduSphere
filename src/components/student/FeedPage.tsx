@@ -44,6 +44,10 @@ const FeedPage = ({ user }: FeedPageProps) => {
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
 
+  const [profileModalUser, setProfileModalUser] = useState<any | null>(null);
+  const [profileModalLoading, setProfileModalLoading] = useState(false);
+  const [profileModalFollowing, setProfileModalFollowing] = useState(false);
+
   useEffect(() => { loadPosts(); }, []);
 
   const loadPosts = async () => {
@@ -155,6 +159,92 @@ const FeedPage = ({ user }: FeedPageProps) => {
     return `${Math.floor(hrs / 24)}d`;
   };
 
+  const openUserProfile = async (userId: string) => {
+    setProfileModalLoading(true);
+    setProfileModalUser(null);
+    setProfileModalFollowing(false);
+    try {
+      const { data: p, error } = await supabase
+        .from("profiles")
+        .select("*, classes(name), schools(name)")
+        .eq("id", userId)
+        .maybeSingle();
+      if (error || !p) {
+        toast.error(error?.message || (lang === "kz" ? "Пайдаланушы табылмады" : "Пользователь не найден"));
+        return;
+      }
+      setProfileModalUser(p);
+      const { data: follow } = await supabase
+        .from("followers")
+        .select("id")
+        .eq("follower_id", user.id)
+        .eq("following_id", userId)
+        .maybeSingle();
+      setProfileModalFollowing(!!follow);
+    } finally {
+      setProfileModalLoading(false);
+    }
+  };
+
+  const toggleFollowModalUser = async () => {
+    if (!profileModalUser) return;
+    const targetId = profileModalUser.id;
+    if (profileModalFollowing) {
+      const { error } = await supabase.from("followers").delete().eq("follower_id", user.id).eq("following_id", targetId);
+      if (error) return toast.error(error.message);
+      setProfileModalFollowing(false);
+    } else {
+      const { error } = await supabase.from("followers").insert({ follower_id: user.id, following_id: targetId });
+      if (error) return toast.error(error.message);
+      setProfileModalFollowing(true);
+    }
+  };
+
+  const startDirectChatFromModal = async () => {
+    if (!profileModalUser) return;
+    const otherId = profileModalUser.id;
+    try {
+      const { data: myConvos } = await supabase
+        .from("conversation_members")
+        .select("conversation_id")
+        .eq("user_id", user.id);
+
+      if (myConvos) {
+        for (const mc of myConvos) {
+          const { data: otherMember } = await supabase
+            .from("conversation_members")
+            .select("user_id")
+            .eq("conversation_id", mc.conversation_id)
+            .eq("user_id", otherId)
+            .single();
+          if (otherMember) {
+            toast.success(lang === "kz" ? "Чат ашылды" : "Чат открыт");
+            setProfileModalUser(null);
+            return;
+          }
+        }
+      }
+
+      const { data: newConvo, error: convoErr } = await supabase
+        .from("conversations")
+        .insert({ type: "direct" })
+        .select()
+        .single();
+      if (convoErr || !newConvo) return toast.error(convoErr?.message || "Не удалось создать чат");
+
+      const { error: membersErr } = await supabase.from("conversation_members").insert([
+        { conversation_id: newConvo.id, user_id: user.id },
+        { conversation_id: newConvo.id, user_id: otherId },
+      ]);
+      if (membersErr) return toast.error(membersErr.message);
+      toast.success(lang === "kz" ? "Чат ашылды" : "Чат открыт");
+      setProfileModalUser(null);
+    } catch (e) {
+      console.error(e);
+      toast.error(lang === "kz" ? "Чат ашылмады" : "Не удалось открыть чат");
+    }
+  };
+
   return (
     <div className="pt-12 pb-4">
       {/* Header */}
@@ -212,10 +302,26 @@ const FeedPage = ({ user }: FeedPageProps) => {
             className="bg-card rounded-2xl shadow-card overflow-hidden">
             {/* Post header */}
             <div className="flex items-center gap-3 px-4 pt-4 pb-2">
-              <img src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${post.author?.username || 'user'}`}
-                alt="" className="w-10 h-10 rounded-full bg-muted" />
+              <button
+                type="button"
+                onClick={() => post.author_id && openUserProfile(post.author_id)}
+                className="w-10 h-10 rounded-full bg-muted overflow-hidden"
+                title="@profile"
+              >
+                <img
+                  src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${post.author?.username || "user"}`}
+                  alt=""
+                  className="w-10 h-10"
+                />
+              </button>
               <div className="flex-1">
-                <p className="font-bold text-foreground text-sm">@{post.author?.username || "user"}</p>
+                <button
+                  type="button"
+                  onClick={() => post.author_id && openUserProfile(post.author_id)}
+                  className="font-bold text-foreground text-sm"
+                >
+                  @{post.author?.username || "user"}
+                </button>
                 <p className="text-[10px] text-muted-foreground">{timeAgo(post.created_at)}</p>
               </div>
             </div>
@@ -275,6 +381,63 @@ const FeedPage = ({ user }: FeedPageProps) => {
           </motion.div>
         ))}
       </div>
+
+      {/* Profile modal */}
+      {profileModalLoading || profileModalUser ? (
+        <div className="fixed inset-0 z-50">
+          <button className="absolute inset-0 bg-black/40" onClick={() => setProfileModalUser(null)} />
+          <div className="absolute left-1/2 top-1/2 w-[92%] max-w-md -translate-x-1/2 -translate-y-1/2 bg-background rounded-2xl border border-border shadow-xl overflow-hidden">
+            <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-border bg-card">
+              <div className="font-black text-foreground text-sm">
+                {lang === "kz" ? "Профиль" : "Профиль"}
+              </div>
+              <button onClick={() => setProfileModalUser(null)} className="text-muted-foreground">✕</button>
+            </div>
+            <div className="p-4">
+              {profileModalLoading ? (
+                <p className="text-sm text-muted-foreground text-center py-10">
+                  {lang === "kz" ? "Жүктелуде..." : "Загрузка..."}
+                </p>
+              ) : profileModalUser ? (
+                <>
+                  <div className="flex items-center gap-3 mb-4">
+                    <img
+                      src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${profileModalUser.username}`}
+                      alt=""
+                      className="w-14 h-14 rounded-full bg-muted"
+                    />
+                    <div className="min-w-0">
+                      <p className="font-black text-foreground truncate">@{profileModalUser.username}</p>
+                      <p className="text-xs text-muted-foreground truncate">{profileModalUser.full_name || ""}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {profileModalUser.classes?.name || ""} {profileModalUser.schools?.name ? `• ${profileModalUser.schools?.name}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  {profileModalUser.id !== user.id && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={toggleFollowModalUser}
+                        className={`flex-1 font-bold py-2.5 rounded-xl ${
+                          profileModalFollowing ? "bg-muted text-foreground" : "gradient-primary text-primary-foreground"
+                        }`}
+                      >
+                        {profileModalFollowing ? (lang === "kz" ? "Жазылдыңыз" : "Вы подписаны") : (lang === "kz" ? "Жазылу" : "Подписаться")}
+                      </button>
+                      <button
+                        onClick={startDirectChatFromModal}
+                        className="flex-1 bg-card border-2 border-border font-bold py-2.5 rounded-xl text-foreground"
+                      >
+                        {lang === "kz" ? "Жазу" : "Написать"}
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

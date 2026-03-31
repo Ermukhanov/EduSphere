@@ -177,7 +177,11 @@ const Index = () => {
 
   return (
     <I18nProvider>
-      <div className="max-w-lg mx-auto min-h-screen bg-background relative overflow-hidden">
+      <div
+        className={`min-h-screen bg-background relative overflow-hidden ${
+          screen === "dashboard" ? "w-full" : "max-w-lg mx-auto"
+        }`}
+      >
         <AnimatePresence mode="wait">
           {screen === "splash" && <SplashScreen key="splash" onComplete={handleSplashComplete} />}
         </AnimatePresence>

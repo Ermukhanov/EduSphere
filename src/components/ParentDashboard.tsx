@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useI18n } from "@/lib/i18n";
 import { supabase, callAlemAI } from "@/lib/supabase";
-import { Home, User, Star, MessageCircle, Sparkles, TrendingUp, Heart, Award, LogOut } from "lucide-react";
+import { Home, User, Star, MessageCircle, Sparkles, TrendingUp, Heart, Award, LogOut, CalendarDays, Clock, MapPin, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import AIPage from "./student/AIPage";
 import ChatPage from "./student/ChatPage";
@@ -12,13 +12,15 @@ interface ParentDashboardProps {
   onLogout: () => void;
 }
 
-type Tab = "home" | "grades" | "ai" | "chat" | "profile";
+type Tab = "home" | "grades" | "schedule" | "ai" | "chat" | "profile";
 
 const ParentDashboard = ({ user, onLogout }: ParentDashboardProps) => {
   const { t, lang, setLang } = useI18n();
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [child, setChild] = useState<any>(null);
   const [childGrades, setChildGrades] = useState<any[]>([]);
+  const [childLessons, setChildLessons] = useState<any[]>([]);
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [aiSummary, setAiSummary] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -51,6 +53,18 @@ const ParentDashboard = ({ user, onLogout }: ParentDashboardProps) => {
           .limit(20);
 
         if (grades) setChildGrades(grades);
+
+        // Load schedule (today)
+        const dayOfWeek = new Date().getDay() || 7;
+        setLoadingSchedule(true);
+        const { data: lessons } = await supabase
+          .from("lessons")
+          .select("*, subjects(name)")
+          .eq("class_id", childProfile.class_id)
+          .eq("day_of_week", dayOfWeek)
+          .order("start_time", { ascending: true });
+        setChildLessons(lessons || []);
+        setLoadingSchedule(false);
 
         // AI summary
         const gradesCtx = grades?.slice(0, 5).map((g: any) => `${g.subjects?.name}: ${g.grade}`).join(", ") || "";
@@ -91,6 +105,7 @@ const ParentDashboard = ({ user, onLogout }: ParentDashboardProps) => {
   const tabs: { key: Tab; icon: typeof Home; label: string }[] = [
     { key: "home", icon: Home, label: t("nav.home") },
     { key: "grades", icon: Star, label: t("nav.grades") },
+    { key: "schedule", icon: CalendarDays, label: t("nav.schedule") },
     { key: "ai", icon: Sparkles, label: "AI" },
     { key: "chat", icon: MessageCircle, label: t("nav.chat") },
     { key: "profile", icon: User, label: t("nav.profile") },
@@ -239,10 +254,57 @@ const ParentDashboard = ({ user, onLogout }: ParentDashboardProps) => {
     </div>
   );
 
+  const renderSchedule = () => (
+    <div className="px-4 pt-12 pb-4">
+      <h1 className="text-xl font-black text-foreground mb-4 flex items-center gap-2">
+        <CalendarDays className="w-5 h-5 text-primary" /> {t("nav.schedule")}
+      </h1>
+      {!child ? (
+        <p className="text-muted-foreground text-center py-10">{lang === "kz" ? "Бала табылмады" : "Ребёнок не найден"}</p>
+      ) : loadingSchedule ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        </div>
+      ) : childLessons.length === 0 ? (
+        <p className="text-muted-foreground text-center py-10">{t("home.noLessons")}</p>
+      ) : (
+        <div className="space-y-2">
+          {childLessons.map((lesson: any, i: number) => (
+            <motion.div
+              key={lesson.id || i}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.03 }}
+              className="bg-card rounded-2xl p-4 shadow-card"
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-foreground text-sm truncate">{lesson.subjects?.name || "—"}</p>
+                  <p className="text-xs text-muted-foreground font-semibold mt-1">
+                    {String(lesson.start_time).slice(0, 5)}–{String(lesson.end_time).slice(0, 5)}
+                  </p>
+                  {lesson.room && (
+                    <p className="text-xs text-muted-foreground font-semibold mt-1 flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5" /> Каб. {lesson.room}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   const renderTab = () => {
     switch (activeTab) {
       case "home": return renderHome();
       case "grades": return renderGrades();
+      case "schedule": return renderSchedule();
       case "ai": return <AIPage user={user} />;
       case "chat": return <ChatPage user={user} />;
       case "profile": return renderProfile();
