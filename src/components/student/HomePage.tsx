@@ -69,61 +69,88 @@ const HomePage = ({ user }: HomePageProps) => {
 
   const loadData = async () => {
     setLoading(true);
-    const { data: subjectsData } = await supabase.from("subjects").select("*");
-    if (subjectsData?.length) setSubjects(subjectsData);
+    try {
+      const { data: subjectsData, error: subjectsErr } = await supabase.from("subjects").select("*");
+      if (subjectsErr) toast.error(subjectsErr.message);
+      if (subjectsData?.length) setSubjects(subjectsData);
 
-    // Grades
-    const { data: gradesData } = await supabase
-      .from("grades").select("*, subjects(name)").eq("student_id", user.id)
-      .order("created_at", { ascending: false }).limit(20);
+      const { data: gradesData, error: gradesErr } = await supabase
+        .from("grades")
+        .select("*, subjects(name)")
+        .eq("student_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (gradesErr) toast.error(gradesErr.message);
 
-    if (gradesData?.length) {
-      setGrades(gradesData);
-    } else {
-      const mock = getBilimClassMock();
-      setGrades(mock.map((m, i) => ({ id: `mock-${i}`, grade: m.grade, subjects: { name: m.subject }, comment: m.type, isMock: true })));
-    }
-
-    // Lessons
-    const dayOfWeek = new Date().getDay() || 7;
-    const { data: lessonsData } = await supabase
-      .from("lessons").select("*, subjects(name)")
-      .eq("class_id", user.class_id).eq("day_of_week", dayOfWeek)
-      .order("start_time", { ascending: true });
-    if (lessonsData) setLessons(lessonsData);
-
-    // Leaderboard
-    if (user.class_id) {
-      const { data: leaderData } = await supabase
-        .from("profiles").select("id, username, xp, level, avatar_url")
-        .eq("class_id", user.class_id).order("xp", { ascending: false }).limit(10);
-      if (leaderData) {
-        setLeaderboard(leaderData);
-        const rank = leaderData.findIndex((p: any) => p.id === user.id);
-        setMyRank(rank >= 0 ? rank + 1 : 0);
+      if (gradesData?.length) {
+        setGrades(gradesData);
+      } else {
+        const mock = getBilimClassMock();
+        setGrades(
+          mock.map((m, i) => ({
+            id: `mock-${i}`,
+            grade: m.grade,
+            subjects: { name: m.subject },
+            comment: m.type,
+            isMock: true,
+          })),
+        );
       }
+
+      const dayOfWeek = new Date().getDay() || 7;
+      const { data: lessonsData, error: lessonsErr } = await supabase
+        .from("lessons")
+        .select("*, subjects(name)")
+        .eq("class_id", user.class_id)
+        .eq("day_of_week", dayOfWeek)
+        .order("start_time", { ascending: true });
+      if (lessonsErr) toast.error(lessonsErr.message);
+      if (lessonsData) setLessons(lessonsData);
+
+      if (user.class_id) {
+        const { data: leaderData, error: leaderErr } = await supabase
+          .from("profiles")
+          .select("id, username, xp, level, avatar_url")
+          .eq("class_id", user.class_id)
+          .order("xp", { ascending: false })
+          .limit(10);
+        if (leaderErr) toast.error(leaderErr.message);
+        if (leaderData) {
+          setLeaderboard(leaderData);
+          const rank = leaderData.findIndex((p: any) => p.id === user.id);
+          setMyRank(rank >= 0 ? rank + 1 : 0);
+        }
+      }
+
+      const { data: achData, error: achErr } = await supabase.from("achievements").select("*");
+      if (achErr) toast.error(achErr.message);
+      if (achData) setAllAchievements(achData);
+
+      const { data: userAch, error: userAchErr } = await supabase
+        .from("user_achievements")
+        .select("achievement_id")
+        .eq("user_id", user.id);
+      if (userAchErr) toast.error(userAchErr.message);
+      if (userAch) setUserAchievements(userAch.map((a: any) => a.achievement_id));
+
+      // AI insight should never block the main screen.
+      const recentGrades = gradesData?.slice(0, 5) || [];
+      if (recentGrades.length > 0) {
+        const gradesCtx = recentGrades.map((g: any) => `${g.subjects?.name}: ${g.grade}`).join(", ");
+        const prompt =
+          lang === "kz"
+            ? `Сен оқушының AI көмекшісісің. Оқушы аты: ${user.username}. Соңғы бағалары: ${gradesCtx}. Бір қысқа кеңес бер (1-2 сөйлем). Ынталандыр.`
+            : `Ты AI-помощник ученика. Имя: ${user.username}. Последние оценки: ${gradesCtx}. Дай один короткий совет (1-2 предложения). Мотивируй.`;
+        void callAlemAI([{ role: "user", content: prompt }]).then((insight) => setAiInsight(insight));
+      } else {
+        setAiInsight(lang === "kz" ? "Оқуды бастайық! 💪" : "Начнём учиться! 💪");
+      }
+    } catch (e) {
+      console.error("HomePage loadData error:", e);
+      toast.error(lang === "kz" ? "Деректер жүктелмеді" : "Не удалось загрузить данные");
+    } finally {
+      setLoading(false);
     }
-
-    // Achievements
-    const { data: achData } = await supabase.from("achievements").select("*");
-    if (achData) setAllAchievements(achData);
-    const { data: userAch } = await supabase.from("user_achievements").select("achievement_id").eq("user_id", user.id);
-    if (userAch) setUserAchievements(userAch.map((a: any) => a.achievement_id));
-
-    // AI insight
-    const recentGrades = gradesData?.slice(0, 5) || [];
-    if (recentGrades.length > 0) {
-      const gradesCtx = recentGrades.map((g: any) => `${g.subjects?.name}: ${g.grade}`).join(", ");
-      const prompt = lang === "kz"
-        ? `Сен оқушының AI көмекшісісің. Оқушы аты: ${user.username}. Соңғы бағалары: ${gradesCtx}. Бір қысқа кеңес бер (1-2 сөйлем). Ынталандыр.`
-        : `Ты AI-помощник ученика. Имя: ${user.username}. Последние оценки: ${gradesCtx}. Дай один короткий совет (1-2 предложения). Мотивируй.`;
-      const insight = await callAlemAI([{ role: "user", content: prompt }]);
-      setAiInsight(insight);
-    } else {
-      setAiInsight(lang === "kz" ? "Оқуды бастайық! 💪" : "Начнём учиться! 💪");
-    }
-
-    setLoading(false);
   };
 
   const getGradeColor = (grade: number) => {

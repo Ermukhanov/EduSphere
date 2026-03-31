@@ -1,5 +1,21 @@
-const CACHE_NAME = "edusphere-v2";
+// IMPORTANT: cache only same-origin static assets.
+// Do NOT cache API calls (Supabase, AI, etc.) or HTML navigations aggressively.
+const CACHE_NAME = "edusphere-v3";
 const APP_SHELL = ["/", "/manifest.json", "/favicon.ico", "/icon-192.png", "/icon-512.png"];
+
+function isSameOrigin(url) {
+  try {
+    return new URL(url).origin === self.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function isStaticRequest(request) {
+  if (!isSameOrigin(request.url)) return false;
+  const dest = request.destination;
+  return dest === "script" || dest === "style" || dest === "image" || dest === "font" || dest === "manifest";
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -22,16 +38,31 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
+  const req = event.request;
+
+  // Navigation: network-first, fallback to cached app shell.
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req).catch(() => caches.match("/"))
+    );
+    return;
+  }
+
+  // Static assets: cache-first.
+  if (isStaticRequest(req)) {
+    event.respondWith(
+      caches.match(req).then((cached) => {
+        if (cached) return cached;
+        return fetch(req).then((response) => {
           const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, cloned));
           return response;
-        })
-        .catch(() => caches.match("/"));
-    })
-  );
+        });
+      })
+    );
+    return;
+  }
+
+  // Anything else (including cross-origin / API calls): network only.
+  return;
 });
