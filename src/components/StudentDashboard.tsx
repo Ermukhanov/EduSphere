@@ -1,19 +1,20 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useI18n } from "@/lib/i18n";
-import { Home, Sparkles, MessageCircle, Newspaper, User } from "lucide-react";
+import { Home, Sparkles, MessageCircle, Newspaper, User, CalendarDays } from "lucide-react";
 import HomePage from "./student/HomePage";
 import ProfilePage from "./student/ProfilePage";
 import AIPage from "./student/AIPage";
 import FeedPage from "./student/FeedPage";
 import ChatPage from "./student/ChatPage";
+import SchedulePage from "./student/SchedulePage";
 
 interface StudentDashboardProps {
   user: any;
   onLogout: () => void;
 }
 
-type Tab = "home" | "feed" | "ai" | "chat" | "profile";
+type Tab = "home" | "feed" | "schedule" | "ai" | "chat" | "profile";
 
 const StudentDashboard = ({ user, onLogout }: StudentDashboardProps) => {
   const { t } = useI18n();
@@ -29,6 +30,7 @@ const StudentDashboard = ({ user, onLogout }: StudentDashboardProps) => {
   const tabs: { key: Tab; icon: typeof Home; label: string }[] = [
     { key: "home", icon: Home, label: t("nav.home") },
     { key: "feed", icon: Newspaper, label: t("home.feed") },
+    { key: "schedule", icon: CalendarDays, label: t("nav.schedule") },
     { key: "ai", icon: Sparkles, label: "AI" },
     { key: "chat", icon: MessageCircle, label: t("nav.chat") },
     { key: "profile", icon: User, label: t("nav.profile") },
@@ -38,6 +40,7 @@ const StudentDashboard = ({ user, onLogout }: StudentDashboardProps) => {
     switch (activeTab) {
       case "home": return <HomePage user={user} />;
       case "feed": return <FeedPage user={user} />;
+      case "schedule": return <SchedulePage user={user} />;
       case "ai": return <AIPage user={user} />;
       case "chat": return <ChatPage user={user} />;
       case "profile": return <ProfilePage user={user} onLogout={onLogout} />;
