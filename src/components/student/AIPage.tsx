@@ -302,12 +302,12 @@ ${languageInstruction}`;
 
   return (
     <div className="h-screen flex bg-background">
-      <div className="hidden md:block w-[320px] border-r border-border">
+      <div className="hidden lg:block w-[320px] border-r border-border">
         <Sidebar />
       </div>
 
       {showSidebar && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden">
           <button className="absolute inset-0 bg-black/40" onClick={() => setShowSidebar(false)} />
           <div className="absolute left-0 top-0 bottom-0 w-[85%] max-w-[360px] bg-background border-r border-border">
             <Sidebar />
@@ -317,7 +317,7 @@ ${languageInstruction}`;
 
       <div className="flex-1 flex flex-col min-w-0">
         <div className="px-4 pt-12 pb-3 flex items-center gap-3 border-b border-border bg-card">
-          <button onClick={() => setShowSidebar(true)} className="md:hidden text-foreground">
+          <button onClick={() => setShowSidebar(true)} className="lg:hidden text-foreground">
             <Menu className="w-5 h-5" />
           </button>
           <Sparkles className="w-5 h-5 text-primary" />
