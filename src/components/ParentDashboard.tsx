@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useI18n } from "@/lib/i18n";
 import { supabase, callAlemAI } from "@/lib/supabase";
+import { getMockScheduleForDay } from "@/lib/mockSchedule";
 import { Home, User, Star, MessageCircle, Sparkles, TrendingUp, Heart, Award, LogOut, CalendarDays, Clock, MapPin, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import AIPage from "./student/AIPage";
@@ -63,7 +64,7 @@ const ParentDashboard = ({ user, onLogout }: ParentDashboardProps) => {
           .eq("class_id", childProfile.class_id)
           .eq("day_of_week", dayOfWeek)
           .order("start_time", { ascending: true });
-        setChildLessons(lessons || []);
+        setChildLessons((lessons && lessons.length > 0) ? lessons : getMockScheduleForDay(childProfile.classes?.name, dayOfWeek));
         setLoadingSchedule(false);
 
         // AI summary
@@ -74,6 +75,10 @@ const ParentDashboard = ({ user, onLogout }: ParentDashboardProps) => {
         const summary = await callAlemAI([{ role: "user", content: prompt }]);
         setAiSummary(summary);
       }
+    }
+    if (!link) {
+      setChildLessons(getMockScheduleForDay(undefined, new Date().getDay() || 7));
+      setLoadingSchedule(false);
     }
     setLoading(false);
   };

@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useI18n } from "@/lib/i18n";
 import { supabase, callAlemAI } from "@/lib/supabase";
-import { Home, User, Star, Users, Sparkles, BookOpen, AlertTriangle, LogOut, Plus, Check, Newspaper } from "lucide-react";
+import { getClassScheduleMap, MOCK_DAY_ORDER } from "@/lib/mockSchedule";
+import { Home, User, Star, Users, Sparkles, BookOpen, AlertTriangle, LogOut, Check, Newspaper, CalendarDays, Clock, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import AIPage from "./student/AIPage";
 import FeedPage from "./student/FeedPage";
@@ -12,13 +13,22 @@ interface TeacherDashboardProps {
   onLogout: () => void;
 }
 
-type Tab = "home" | "feed" | "students" | "grades" | "ai" | "profile";
+type Tab = "home" | "feed" | "students" | "grades" | "schedule" | "ai" | "profile";
+
+const DAY_LABELS: Record<number, string> = {
+  1: "Понедельник",
+  2: "Вторник",
+  3: "Среда",
+  4: "Четверг",
+};
 
 const TeacherDashboard = ({ user, onLogout }: TeacherDashboardProps) => {
   const { t, lang, setLang } = useI18n();
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [students, setStudents] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
+  const teacherClassName = user.class_name || user.classes?.name || "10A";
+  const scheduleByClass = getClassScheduleMap([teacherClassName, "9A", "11A"]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -83,6 +93,7 @@ const TeacherDashboard = ({ user, onLogout }: TeacherDashboardProps) => {
     { key: "feed", icon: Newspaper, label: lang === "kz" ? "Лента" : "Лента" },
     { key: "students", icon: Users, label: lang === "kz" ? "Оқушылар" : "Ученики" },
     { key: "grades", icon: Star, label: t("nav.grades") },
+    { key: "schedule", icon: CalendarDays, label: t("nav.schedule") },
     { key: "ai", icon: Sparkles, label: "AI" },
     { key: "profile", icon: User, label: t("nav.profile") },
   ];
@@ -174,6 +185,63 @@ const TeacherDashboard = ({ user, onLogout }: TeacherDashboardProps) => {
     </div>
   );
 
+  const renderSchedule = () => (
+    <div className="px-4 pt-12 pb-4">
+      <h1 className="text-xl font-black text-foreground mb-4 flex items-center gap-2">
+        <CalendarDays className="w-5 h-5 text-primary" />
+        {lang === "kz" ? "Сабақ кестесі" : "Расписание по классам"}
+      </h1>
+      <div className="space-y-4">
+        {Object.entries(scheduleByClass).map(([className, lessons]) => (
+          <div key={className} className="bg-card rounded-2xl p-4 shadow-card">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-base font-black text-foreground">{className}</p>
+                <p className="text-xs text-muted-foreground font-semibold">
+                  {lang === "kz" ? "Мок кесте, дүйсенбі-бейсенбі" : "Mock-расписание, понедельник-четверг"}
+                </p>
+              </div>
+              <span className="text-[10px] font-black bg-primary/10 text-primary px-2 py-1 rounded-full">
+                MOCK
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {MOCK_DAY_ORDER.map((day) => (
+                <div key={`${className}-${day}`}>
+                  <p className="text-xs font-black uppercase tracking-wide text-muted-foreground mb-2">
+                    {DAY_LABELS[day]}
+                  </p>
+                  <div className="space-y-2">
+                    {lessons.filter((lesson) => lesson.day_of_week === day).map((lesson) => (
+                      <div key={lesson.id} className="rounded-xl border border-border p-3">
+                        <div className="flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Clock className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-foreground text-sm">{lesson.subjects.name}</p>
+                            <p className="text-xs text-muted-foreground font-semibold mt-1">
+                              {lesson.start_time}–{lesson.end_time}
+                            </p>
+                            <p className="text-xs text-muted-foreground font-semibold mt-1 flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5" />
+                              {lang === "kz" ? "Каб." : "Каб."} {lesson.room}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   const renderProfile = () => (
     <div className="px-4 pt-12 pb-4">
       <div className="flex flex-col items-center mb-6">
@@ -210,6 +278,7 @@ const TeacherDashboard = ({ user, onLogout }: TeacherDashboardProps) => {
       case "feed": return <FeedPage user={user} />;
       case "students": return renderStudents();
       case "grades": return renderGrades();
+      case "schedule": return renderSchedule();
       case "ai": return <AIPage user={user} />;
       case "profile": return renderProfile();
       default: return <div className="px-4 pt-12"><p className="text-muted-foreground text-center py-20">{lang === "kz" ? "Жақында..." : "Скоро..."}</p></div>;

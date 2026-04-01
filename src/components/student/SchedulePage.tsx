@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
+import { getMockScheduleForClass } from "@/lib/mockSchedule";
 import { CalendarDays, Clock, Loader2, MapPin } from "lucide-react";
 
 interface SchedulePageProps {
@@ -32,7 +33,7 @@ export default function SchedulePage({ user }: SchedulePageProps) {
   useEffect(() => {
     const load = async () => {
       if (!user?.class_id) {
-        setLessons([]);
+        setLessons(getMockScheduleForClass(user?.class_name));
         setLoading(false);
         return;
       }
@@ -46,9 +47,10 @@ export default function SchedulePage({ user }: SchedulePageProps) {
 
       if (error) {
         console.error("Schedule load error:", error);
-        setLessons([]);
+        setLessons(getMockScheduleForClass(user?.class_name));
       } else {
-        setLessons((data || []) as LessonRow[]);
+        const nextLessons = (data || []) as LessonRow[];
+        setLessons(nextLessons.length > 0 ? nextLessons : getMockScheduleForClass(user?.class_name));
       }
       setLoading(false);
     };
